@@ -49,7 +49,8 @@ import electrumx.lib.tx_axe as lib_tx_axe
 import electrumx.server.block_processor as block_proc
 import electrumx.server.daemon as daemon
 from electrumx.server.session import (ElectrumX, DashElectrumX,
-                                      SmartCashElectrumX, AuxPoWElectrumX)
+                                      SmartCashElectrumX, AuxPoWElectrumX,
+                                      NameIndexElectrumX, NameIndexAuxPoWElectrumX)
 
 
 @dataclass
@@ -396,7 +397,7 @@ class NameMixin:
                     # Script structure: https://git.io/fjuRu
                     added, template = cls._add_data_placeholders_to_template(ops[i:], template)
                     offset += added - 1  # subtract the "DATA_PUSH_MULTIPLE" opcode
-                elif type(op) == str:
+                elif isinstance(op, str):
                     template.append(-1)
                     named_index[op] = i + offset
                 else:
@@ -438,7 +439,7 @@ class NameMixin:
         data_placeholders = 0
 
         for opcode in opcodes:
-            if type(opcode) == tuple:
+            if isinstance(opcode, tuple):
                 data_placeholders += 1
             else:
                 break
@@ -484,6 +485,8 @@ class NameIndexMixin(NameMixin):
     a name index in addition to the index by address / script."""
 
     BLOCK_PROCESSOR = block_proc.NameIndexBlockProcessor
+    SESSIONCLS = NameIndexElectrumX
+    NAME_EXPIRATION = None
 
     @classmethod
     def build_name_index_script(cls, name):
@@ -527,6 +530,10 @@ class NameIndexMixin(NameMixin):
             return None
 
         return super().hashX_from_script(name_index_script)
+
+
+class NameIndexAuxPoWMixin(NameIndexMixin, AuxPowMixin):
+    SESSIONCLS = NameIndexAuxPoWElectrumX
 
 
 class PrimeChainPowMixin:
@@ -636,8 +643,6 @@ class Bitcoin(BitcoinMixin, Coin):
         'electrum.vom-stausee.de s t',
         'electrum.hsmiths.com s t',
         'helicarrier.bauerj.eu s t',
-        'hsmiths4fyqlw5xw.onion s t',
-        'ozahtqwp25chjdjd.onion s t',
         'electrum.hodlister.co s',
         'electrum3.hodlister.co s',
         'btc.usebsv.com s50006',
@@ -648,6 +653,15 @@ class Bitcoin(BitcoinMixin, Coin):
         'electrum.jochen-hoenicke.de s50005 t50003',
         'vps5.hsmiths.com s',
         'electrum.emzy.de s',
+        'electrum1.cipig.net t10000 s20000',
+        'ulrichard.ch s',
+        'hodlers.beer s',
+        'v7gtzf7nua6hdmb2wtqaqioqmesdb4xrlly4zwr7bvayxv2bpg665pqd.onion t'
+        'qeqgdlw2ezf3uabook2ny3lztjxxzeyyoqw2k7cempzvqpknbmevhmyd.onion t'
+        'kciybn4d4vuqvobdl2kdp3r2rudqbqvsymqwg4jomzft6m6gaibaf6yd.onion t'
+        'explorerzydxu5ecjrkwceayqybizmpjjznk5izmitf2modhcusuqlid.onion t110'
+        'v7o2hkemnt677k3jxcbosmjjxw3p5khjyu7jwv7orfy6rwtkizbshwqd.onion t57001'
+        'nf365b5sbzk5j4jreimskffwnfpka7qtamyni5doohoom3g63o5tldad.onion t'
     ]
 
     @classmethod
@@ -902,11 +916,15 @@ class BitcoinTestnet(BitcoinTestnetMixin, Coin):
     CRASH_CLIENT_VER = (3, 2, 3)
     PEERS = [
         'testnet.hsmiths.com t53011 s53012',
-        'hsmithsxurybd7uh.onion t53011 s53012',
         'testnet.qtornado.com s t',
         'testnet1.bauerj.eu t50001 s50002',
         'tn.not.fyi t55001 s55002',
         'bitcoin.cluelessperson.com s t',
+        'blackie.c3-soft.com s57006',
+        'electrum.blockstream.info t60001 s60002',
+        'testnet.aranguren.org s t',
+        'explorerzydxu5ecjrkwceayqybizmpjjznk5izmitf2modhcusuqlid.onion t143',
+        'electrum1.cipig.net t10068',
     ]
 
     @classmethod
@@ -950,6 +968,23 @@ class BitcoinSignet(BitcoinTestnet):
 
 
 class BitcoinSegwitSignet(BitcoinSignet):
+    NAME = "BitcoinSegwit"  # support legacy name
+
+
+class BitcoinTestnet4(BitcoinTestnet):
+    NAME = "Bitcoin"
+    NET = "testnet4"
+    GENESIS_HASH = ('00000000da84f2bafbbc53dee25a72ae'
+                    '507ff4914b867c565be350b0da8bf043')
+    PEERS = [
+        'blackie.c3-soft.com s57010 t57009',
+        'testnet4-electrumx.wakiyamap.dev',
+    ]
+    TX_COUNT = 1
+    TX_COUNT_HEIGHT = 1
+
+
+class BitcoinSegwitTestnet4(BitcoinTestnet4):
     NAME = "BitcoinSegwit"  # support legacy name
 
 
@@ -1000,7 +1035,7 @@ class Litecoin(Coin):
     WIF_BYTE = bytes.fromhex("b0")
     GENESIS_HASH = ('12a765e31ffd4059bada1e25190f6e98'
                     'c99d9714d334efa41a195a7e7e04bfe2')
-    DESERIALIZER = lib_tx.DeserializerSegWit
+    DESERIALIZER = lib_tx.DeserializerLitecoin
     TX_COUNT = 8908766
     TX_COUNT_HEIGHT = 1105256
     TX_PER_BLOCK = 10
@@ -1013,7 +1048,6 @@ class Litecoin(Coin):
         'electrum-ltc.wilv.in s t',
         'electrum.cryptomachine.com p1000 s t',
         'electrum.ltc.xurious.com s t',
-        'eywr5eubdbbe2laq.onion s50008 t50007',
     ]
 
 
@@ -1166,7 +1200,7 @@ class Unitus(Coin):
 
 
 # Source: namecoin.org
-class Namecoin(NameIndexMixin, AuxPowMixin, Coin):
+class Namecoin(NameIndexAuxPoWMixin, Coin):
     NAME = "Namecoin"
     SHORTNAME = "NMC"
     NET = "mainnet"
@@ -1183,17 +1217,22 @@ class Namecoin(NameIndexMixin, AuxPowMixin, Coin):
     TX_PER_BLOCK = 10
     RPC_PORT = 8336
     PEERS = [
-        '188.167.144.126 s50002',
+        '198.50.223.25 s50002',
         '46.229.238.187 s57002',
-        '82.119.233.36 s50002',
+        '198.50.223.27 s50002',
         'electrum-nmc.le-space.de s50002',
-        'ex.lug.gs s446',
-        'luggscoqbymhvnkp.onion t82',
+        'electrumx2.nmc.dotbit.zone s50002',
+        'electrumx4.nmc.dotbit.zone s50002',
         'nmc.bitcoins.sk s50002',
         'nmc2.bitcoins.sk s57002',
         'ulrichard.ch s50006 t50005',
+        'h6qrnwxtwiaahsw4qhk2nbutswwb54vnqso6jrxeuk6nwtfbos7jkoqd.onion s50002',
+        'mqhok2edqcxdpklwovquuvvl2q5or4g2o777qwrinydgzfxjbixq76yd.onion s50002',
+        'wirg2tsto7rme7n26lkd3ivbvxmjyy2pktlozwjuep22jcsfsghfqbqd.onion s50002',
+        'quuzpffsddq3aim3gk4oiczzyt5okjjzf4zpe6okzo6qidao6rshynqd.onion s50002',
     ]
     BLOCK_PROCESSOR = block_proc.NameIndexBlockProcessor
+    NAME_EXPIRATION = 36_000
 
     # Name opcodes
     OP_NAME_NEW = OpCodes.OP_1
@@ -1232,6 +1271,7 @@ class NamecoinRegtest(NamecoinTestnet):
     PEERS = []
     TX_COUNT = 1
     TX_COUNT_HEIGHT = 1
+    NAME_EXPIRATION = 30
 
 
 class Dogecoin(AuxPowMixin, Coin):
@@ -1285,7 +1325,6 @@ class Dash(Coin):
         'electrum-drk.club s t',
         'dashcrypto.space s t',
         'electrum.dash.siampm.com s t',
-        'wl4sfwq2hwxnodof.onion s t',
     ]
     SESSIONCLS = DashElectrumX
     DAEMON = daemon.DashDaemon
@@ -1294,8 +1333,8 @@ class Dash(Coin):
     @classmethod
     def header_hash(cls, header):
         '''Given a header return the hash.'''
-        import x11_hash
-        return x11_hash.getPoWHash(header)
+        import dash_hash
+        return dash_hash.getPoWHash(header)
 
 
 class DashTestnet(Dash):
@@ -1642,17 +1681,54 @@ class Blackcoin(ScryptMixin, Coin):
     NAME = "Blackcoin"
     SHORTNAME = "BLK"
     NET = "mainnet"
+    XPUB_VERBYTES = bytes.fromhex("0488B21E")
+    XPRV_VERBYTES = bytes.fromhex("0488ADE4")
     P2PKH_VERBYTE = bytes.fromhex("19")
     P2SH_VERBYTES = (bytes.fromhex("55"),)
     WIF_BYTE = bytes.fromhex("99")
     GENESIS_HASH = ('000001faef25dec4fbcf906e6242621d'
                     'f2c183bf232f263d0ba5b101911e4563')
-    DAEMON = daemon.LegacyRPCDaemon
-    TX_COUNT = 4594999
-    TX_COUNT_HEIGHT = 1667070
+    DESERIALIZER = lib_tx.DeserializerBlackcoin
+    DAEMON = daemon.FakeEstimateFeeDaemon
+    TX_COUNT = 10802426
+    TX_COUNT_HEIGHT = 3431329
     TX_PER_BLOCK = 3
     RPC_PORT = 15715
-    REORG_LIMIT = 5000
+    REORG_LIMIT = 500
+    ESTIMATE_FEE = 0.0001
+    RELAY_FEE = 0.0001
+    PEERS = [
+        'electrum1.blackcoin.nl t10001 s10002',
+        'electrum2.blackcoin.nl t20001 s20002',
+        'electrum3.blackcoin.nl t30001 s30002'
+    ]
+
+
+class BlackcoinTestnet(Blackcoin):
+    NAME = "BlackcoinTestnet"
+    SHORTNAME = "tBLK"
+    NET = "testnet"
+    XPUB_VERBYTES = bytes.fromhex("043587CF")
+    XPRV_VERBYTES = bytes.fromhex("04358394")
+    P2PKH_VERBYTE = bytes.fromhex("6F")
+    P2SH_VERBYTES = (bytes.fromhex("C4"),)
+    WIF_BYTE = bytes.fromhex("EF")
+    GENESIS_HASH = ('0000724595fb3b9609d441cbfb957761'
+                    '5c292abf07d996d3edabc48de843642d')
+    DESERIALIZER = lib_tx.DeserializerBlackcoin
+    DAEMON = daemon.FakeEstimateFeeDaemon
+    TX_COUNT = 1401229
+    TX_COUNT_HEIGHT = 698611
+    TX_PER_BLOCK = 2
+    RPC_PORT = 25715
+    REORG_LIMIT = 500
+    ESTIMATE_FEE = 0.001
+    RELAY_FEE = 0.001
+    PEERS = [
+        'electrum1.blackcoin.nl t10011 s10012',
+        'electrum2.blackcoin.nl t20011 s20012',
+        'electrum3.blackcoin.nl t30011 s30012'
+    ]
 
 
 class Bitbay(ScryptMixin, Coin):
@@ -1842,6 +1918,26 @@ class Vertcoin(Coin):
     TX_PER_BLOCK = 3
     RPC_PORT = 5888
     REORG_LIMIT = 1000
+    PEERS = [
+        'electrumx-vtc.cryptoverted.com t55001 s55002',
+        'electrumx.javerity.com t5885 s5886',
+    ]
+
+
+class VertcoinTestnet(Vertcoin):
+    SHORTNAME = "TVTC"
+    NET = "testnet"
+    XPUB_VERBYTES = bytes.fromhex("043587cf")
+    XPRV_VERBYTES = bytes.fromhex("04358394")
+    P2PKH_VERBYTE = bytes.fromhex("4a")
+    P2SH_VERBYTES = (bytes.fromhex("c4"),)
+    WIF_BYTE = bytes.fromhex("ef")
+    GENESIS_HASH = ('cee8f24feb7a64c8f07916976aa4855d'
+                    'ecac79b6741a8ec2e32e2747497ad2c9')
+    RPC_PORT = 15888
+    PEERS = [
+        'electrumx-tvtc.javerity.com t15885 s15886',
+    ]
 
 
 class Monacoin(Coin):
@@ -1868,7 +1964,6 @@ class Monacoin(Coin):
         'electrumx1.monacoin.ninja s t',
         'electrumx2.movsign.info s t',
         'electrum-mona.bitbank.cc s t',
-        'ri7rzlmdaf4eqbza.onion s t',
     ]
 
 
@@ -2366,8 +2461,8 @@ class Axe(Dash):
         Need to download `axe_hash` module
         Source code: https://github.com/AXErunners/axe_hash
         '''
-        import x11_hash
-        return x11_hash.getPoWHash(header)
+        import dash_hash
+        return dash_hash.getPoWHash(header)
 
 
 class AxeTestnet(Axe):
@@ -2508,8 +2603,8 @@ class Pac(Coin):
     @classmethod
     def header_hash(cls, header):
         '''Given a header return the hash.'''
-        import x11_hash
-        return x11_hash.getPoWHash(header)
+        import dash_hash
+        return dash_hash.getPoWHash(header)
 
 
 class PacTestnet(Pac):
@@ -2620,8 +2715,8 @@ class Polis(Coin):
     @classmethod
     def header_hash(cls, header):
         '''Given a header return the hash.'''
-        import x11_hash
-        return x11_hash.getPoWHash(header)
+        import dash_hash
+        return dash_hash.getPoWHash(header)
 
 
 class MNPCoin(Coin):
@@ -2777,6 +2872,7 @@ class GroestlcoinTestnet(Groestlcoin):
         '75dycxl6lqxujplls3qkhkzffptzdfohv3y5um7s5nhyu6idayqmk7id.onion t',
     ]
 
+
 class GroestlcoinRegtest(GroestlcoinTestnet):
     SHORTNAME = "GRSRT"
     NET = "regtest"
@@ -2784,6 +2880,7 @@ class GroestlcoinRegtest(GroestlcoinTestnet):
     PEERS = []
     TX_COUNT = 1
     TX_COUNT_HEIGHT = 1
+
 
 class GroestlcoinSignet(GroestlcoinTestnet):
     SHORTNAME = "SGRS"
@@ -2794,6 +2891,7 @@ class GroestlcoinSignet(GroestlcoinTestnet):
     PEERS = []
     TX_COUNT = 1
     TX_COUNT_HEIGHT = 1
+
 
 class Pivx(Coin):
     NAME = "PIVX"
@@ -3117,8 +3215,8 @@ class Bitsend(Coin):
             import xevan_hash
             return xevan_hash.getPoWHash(header)
         else:
-            import x11_hash
-            return x11_hash.getPoWHash(header)
+            import dash_hash
+            return dash_hash.getPoWHash(header)
 
     @classmethod
     def genesis_block(cls, block):
@@ -3264,8 +3362,8 @@ class Bolivarcoin(Coin):
     @classmethod
     def header_hash(cls, header):
         '''Given a header return the hash.'''
-        import x11_hash
-        return x11_hash.getPoWHash(header)
+        import dash_hash
+        return dash_hash.getPoWHash(header)
 
 
 class Onixcoin(Coin):
@@ -3289,8 +3387,8 @@ class Onixcoin(Coin):
     @classmethod
     def header_hash(cls, header):
         '''Given a header return the hash.'''
-        import x11_hash
-        return x11_hash.getPoWHash(header)
+        import dash_hash
+        return dash_hash.getPoWHash(header)
 
 
 class Electra(Coin):
@@ -3400,7 +3498,7 @@ class CPUchain(Coin):
         return cpupower.getPoWHash(header)
 
 
-class Xaya(NameIndexMixin, AuxPowMixin, Coin):
+class Xaya(NameIndexAuxPoWMixin, Coin):
     NAME = "Xaya"
     SHORTNAME = "CHI"
     NET = "mainnet"
@@ -4015,3 +4113,129 @@ class Syscoin(AuxPowMixin, Coin):
     RPC_PORT = 8370
     REORG_LIMIT = 2000
     CHUNK_SIZE = 360
+
+
+class Lbry(Coin):
+    NAME = "Lbry"
+    SHORTNAME = "LBC"
+    NET = "mainnet"
+    XPUB_VERBYTES = bytes.fromhex("019C354f")
+    XPRV_VERBYTES = bytes.fromhex("019C3118")
+    P2PKH_VERBYTE = bytes.fromhex("55")
+    P2SH_VERBYTES = (bytes.fromhex("7a"),)
+    WIF_BYTE = bytes.fromhex("1c")
+    GENESIS_HASH = ('9c89283ba0f3227f6c03b70216b9f665'
+                    'f0118d5e0fa729cedf4fb34d6a34f463')
+    DESERIALIZER = lib_tx.DeserializerSegWit
+    BASIC_HEADER_SIZE = 112
+    TX_COUNT = 50792939
+    TX_COUNT_HEIGHT = 1178612
+    TX_PER_BLOCK = 43
+    RPC_PORT = 9245
+    REORG_LIMIT = 5000
+
+
+class Bitweb(Coin):
+    NAME = "Bitweb"
+    SHORTNAME = "BTE"
+    NET = "mainnet"
+    XPUB_VERBYTES = bytes.fromhex("0488b21e")
+    XPRV_VERBYTES = bytes.fromhex("0488ade4")
+    P2PKH_VERBYTE = bytes.fromhex("21")
+    P2SH_VERBYTES = (bytes.fromhex("1E"),)
+    WIF_BYTE = bytes.fromhex("80")
+    GENESIS_HASH = ('00043e9c6bc54d9bd266c3767a83a7b9'
+                    'da435dd7f84e485a2bf2a869be62f1f3')
+    DESERIALIZER = lib_tx.DeserializerSegWit
+    TX_COUNT = 31788
+    TX_COUNT_HEIGHT = 29511
+    TX_PER_BLOCK = 2
+    RPC_PORT = 1605
+
+    @classmethod
+    def header_hash(cls, header):
+        '''Given a header return the hash.'''
+        import bitweb_yespower
+        return bitweb_yespower.getPoWHash(header)
+
+
+class Garlicoin(Coin):
+    NAME = "Garlicoin"
+    SHORTNAME = "GRLC"
+    NET = "mainnet"
+    XPUB_VERBYTES = bytes.fromhex("0488b21e")
+    XPRV_VERBYTES = bytes.fromhex("0488ade4")
+    P2PKH_VERBYTE = bytes.fromhex("26")
+    P2SH_VERBYTES = [bytes.fromhex("32"), bytes.fromhex("05")]
+    WIF_BYTE = bytes.fromhex("b0")
+    GENESIS_HASH = ('2ada80bf415a89358d697569c96eb98c'
+                    'dbf4c3b8878ac5722c01284492e27228')
+    DESERIALIZER = lib_tx.DeserializerSegWit
+    TX_COUNT = 1031869
+    TX_COUNT_HEIGHT = 2343659
+    TX_PER_BLOCK = 2
+    RPC_PORT = 42068
+    REORG_LIMIT = 800
+    PEERS = [
+        'us.node.garlico.in s',
+        'ca.node.garlico.in s t',
+        'sg.node.garlico.in s',
+        'de.node.garlico.in s',
+        'fr.garlium.crapules.org s',
+        'uk.garlium.crapules.org s',
+        'pl.garlium.crapules.org s',
+        'ca.garlium.crapules.org s',
+        'au.garlium.crapules.org s',
+        'electrum.hotgrlc.com s t',
+        'electrum.maxpuig.com s t'
+    ]
+
+
+class Ferrite(Coin):
+    NAME = "Ferrite"
+    SHORTNAME = "FEC"
+    NET = "mainnet"
+    XPUB_VERBYTES = bytes.fromhex("0488b21e")
+    XPRV_VERBYTES = bytes.fromhex("0488ade4")
+    P2PKH_VERBYTE = bytes.fromhex("24")
+    P2SH_VERBYTES = (bytes.fromhex("23"), bytes.fromhex("05"))
+    WIF_BYTE = bytes.fromhex("a3")
+    GENESIS_HASH = ('46ca17415c18e43f5292034ebf9bbd10'
+                    'de80a61fc6dc17180e6609f33d3b48f3')
+    DESERIALIZER = lib_tx.DeserializerSegWit
+    TX_COUNT = 164010
+    TX_COUNT_HEIGHT = 150251
+    TX_PER_BLOCK = 2
+    RPC_PORT = 9573
+    REORG_LIMIT = 800
+    ESTIMATE_FEE = 0.00001
+    RELAY_FEE = 0.00001
+    PEERS = [
+        'enode1.ferritecoin.org s t',
+        'enode2.ferritecoin.org s t',
+        'enode3.ferritecoin.org s t',
+    ]
+
+
+class FerriteTestnet(Ferrite):
+    SHORTNAME = "TFE"
+    NET = "testnet"
+    XPUB_VERBYTES = bytes.fromhex("043587cf")
+    XPRV_VERBYTES = bytes.fromhex("04358394")
+    P2PKH_VERBYTE = bytes.fromhex("6f")
+    P2SH_VERBYTES = (bytes.fromhex("23"), bytes.fromhex("c4"))
+    WIF_BYTE = bytes.fromhex("ef")
+    GENESIS_HASH = ('7a9f43d6e86eefa66e2b79918b2235c9'
+                    '362106f3d9f11f37f7a33450ceae73c1')
+    TX_COUNT = 12445
+    TX_COUNT_HEIGHT = 6290
+    TX_PER_BLOCK = 2
+    RPC_PORT = 19573
+    REORG_LIMIT = 4000
+    ESTIMATE_FEE = 0.00001
+    RELAY_FEE = 0.00001
+    PEERS = [
+        'enode1.ferritecoin.org s t',
+        'enode2.ferritecoin.org s t',
+        'enode3.ferritecoin.org s t',
+    ]
